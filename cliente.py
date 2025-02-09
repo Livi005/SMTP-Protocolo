@@ -8,8 +8,9 @@ import re
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-SMTP_SERVER = "127.0.0.1"
-SMTP_PORT = 2525
+# Valores por defecto para el servidor y puerto SMTP
+DEFAULT_SMTP_SERVER = "127.0.0.1"
+DEFAULT_SMTP_PORT = 2525
 
 def load_key():
     logging.info("Cargando clave de cifrado.")
@@ -31,18 +32,18 @@ async def read_response(reader):
         raise Exception(f"Error del servidor: {response_decoded}")
     return response_decoded
 
-async def authentication(sender, password):
-    logging.info("Iniciando autenticacion.")
+async def authentication(sender, password, smtp_server=DEFAULT_SMTP_SERVER, smtp_port=DEFAULT_SMTP_PORT):
+    logging.info("Iniciando autenticación.")
     validate_email(sender)
 
     ssl_context = ssl.create_default_context()
     ssl_context.load_verify_locations("server.crt")
     
     reader, writer = None, None
-    Bool = False
+    is_authenticated = False
 
     try:
-        reader, writer = await asyncio.open_connection(SMTP_SERVER, SMTP_PORT, ssl=ssl_context)
+        reader, writer = await asyncio.open_connection(smtp_server, smtp_port, ssl=ssl_context)
         await read_response(reader)
 
         writer.write(b"EHLO localhost\r\n")
@@ -65,8 +66,8 @@ async def authentication(sender, password):
         await writer.drain()
         await read_response(reader)
 
-        logging.info("Se autentico correctamente.")
-        Bool = True
+        logging.info("Se autenticó correctamente.")
+        is_authenticated = True
 
     except Exception as e:
         logging.error(f"Error al autenticar: {e}")
@@ -75,26 +76,38 @@ async def authentication(sender, password):
         if writer:
             writer.close()
             await writer.wait_closed()
-        return Bool
-        
-async def send_email(sender, password, recipient, subject, message):
+        return is_authenticated
+
+async def send_email(sender, password, recipients, subject, message,use_header_command=False, extra_headers="",
+                    smtp_server=DEFAULT_SMTP_SERVER, smtp_port=DEFAULT_SMTP_PORT):
+    
     logging.info("Iniciando envío de correo.")
     validate_email(sender)
-    validate_email(recipient)
+    
+    if isinstance(recipients, str):
+        recipients = [r.strip() for r in recipients.split(",") if r.strip()]
+    for r in recipients:
+        validate_email(r)
 
-    headers = f"De: {sender}\nPara: {recipient}\nAsunto: {subject}\nFecha: {formatdate(localtime=True)}\n"
-    full_message = headers + "\n" + message
+    headers = f"De: {sender}\nPara: {', '.join(recipients)}\nAsunto: {subject}\nFecha: {formatdate(localtime=True)}\n"
+    if extra_headers:
+        headers += extra_headers + "\n"
 
-    encrypted_message = cipher_suite.encrypt(full_message.encode())
+    # Si se usa el comando HEADER, se cifra solo el cuerpo; de lo contrario, se cifra todo (cabecera + cuerpo)
+    if use_header_command:
+        encrypted_body = cipher_suite.encrypt(message.encode())
+    else:
+        full_message = headers + "\n" + message
+        encrypted_body = cipher_suite.encrypt(full_message.encode())
 
     ssl_context = ssl.create_default_context()
     ssl_context.load_verify_locations("server.crt")
     
     reader, writer = None, None
-    Bool = False
+    sent = False
 
     try:
-        reader, writer = await asyncio.open_connection(SMTP_SERVER, SMTP_PORT, ssl=ssl_context)
+        reader, writer = await asyncio.open_connection(smtp_server, smtp_port, ssl=ssl_context)
         await read_response(reader)
 
         writer.write(b"EHLO localhost\r\n")
@@ -117,15 +130,21 @@ async def send_email(sender, password, recipient, subject, message):
         await writer.drain()
         await read_response(reader)
 
-        writer.write(f"RCPT TO:{recipient}\r\n".encode())
-        await writer.drain()
-        await read_response(reader)
+        for r in recipients:
+            writer.write(f"RCPT TO:{r}\r\n".encode())
+            await writer.drain()
+            await read_response(reader)
+
+        if use_header_command:
+            writer.write(f"HEADER {headers}\r\n".encode())
+            await writer.drain()
+            await read_response(reader)
 
         writer.write(b"DATA\r\n")
         await writer.drain()
         await read_response(reader)
 
-        writer.write(encrypted_message + b"\r\n.\r\n")
+        writer.write(encrypted_body + b"\r\n.\r\n")
         await writer.drain()
         await read_response(reader)
 
@@ -134,7 +153,7 @@ async def send_email(sender, password, recipient, subject, message):
         await read_response(reader)
 
         logging.info("Correo enviado correctamente.")
-        Bool = True
+        sent = True
 
     except Exception as e:
         logging.error(f"Error al enviar el correo: {e}")
@@ -143,9 +162,9 @@ async def send_email(sender, password, recipient, subject, message):
         if writer:
             writer.close()
             await writer.wait_closed()
-        return Bool
+        return sent
 
-async def retrieve_messages(sender, password):
+async def retrieve_messages(sender, password, smtp_server=DEFAULT_SMTP_SERVER, smtp_port=DEFAULT_SMTP_PORT):
     logging.info("Conectando para recuperar mensajes.")
     ssl_context = ssl.create_default_context()
     ssl_context.load_verify_locations("server.crt")
@@ -154,7 +173,7 @@ async def retrieve_messages(sender, password):
     messages = [] 
 
     try:
-        reader, writer = await asyncio.open_connection(SMTP_SERVER, SMTP_PORT, ssl=ssl_context)
+        reader, writer = await asyncio.open_connection(smtp_server, smtp_port, ssl=ssl_context)
         await read_response(reader)
 
         writer.write(b"EHLO localhost\r\n")
@@ -199,7 +218,7 @@ async def retrieve_messages(sender, password):
             raw_messages = response_decoded.split("\r\n.\r\n")
             
             for raw_message in raw_messages:
-                if raw_message.strip():  # Ignorar bloques vacíos
+                if raw_message.strip():
                     messages.append(raw_message.strip())
             
         except Exception as decode_error:
@@ -224,8 +243,18 @@ async def retrieve_messages(sender, password):
 
     return messages
 
+
 if __name__ == "__main__":
-    sender = "user2@gmail.com"  
-    recipient = "user1@gmail.com"
+    sender = "user2@gmail.com"
+    recipients = ["user1@gmail.com", "user3@gmail.com"]  # Múltiples destinatarios
     subject = "Asunto de prueba 2"
     message = "Este es un mensaje de prueba, para ver si coge sms."
+    password = "tu_contraseña_secreta"
+
+    # Parámetros para el uso del comando HEADER
+    use_header_command = True
+    extra_headers = "X-Custom-Header: Valor personalizado"
+
+    asyncio.run(send_email(sender, password, recipients, subject, message,
+                           use_header_command=use_header_command,
+                           extra_headers=extra_headers))
