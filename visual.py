@@ -155,6 +155,16 @@ class SMTPClientUI(QMainWindow):
         self.subject_input.setPlaceholderText("Asunto")
         layout.addWidget(self.subject_input)
 
+        # Nuevo checkbox para usar el comando HEADER
+        self.header_checkbox = QCheckBox("Usar comando HEADER")
+        self.header_checkbox.setToolTip("Si se activa, se enviará la cabecera mediante el comando HEADER.")
+        layout.addWidget(self.header_checkbox)
+
+        # Campo para cabeceras adicionales (opcional)
+        self.extra_headers_input = QLineEdit()
+        self.extra_headers_input.setPlaceholderText("Cabeceras adicionales (opcional)")
+        layout.addWidget(self.extra_headers_input)
+
         self.body_input = QTextEdit()
         self.body_input.setPlaceholderText("Cuerpo del mensaje")
         self.body_input.setMinimumHeight(300)
@@ -268,6 +278,9 @@ class SMTPClientUI(QMainWindow):
         self.subject_input.clear()
         self.body_input.clear()
         self.send_message.setText("")
+        # Opcional: también limpiar los campos de cabecera si se deseara
+        self.header_checkbox.setChecked(False)
+        self.extra_headers_input.clear()
         self.stacked_widget.setCurrentWidget(self.send_email_screen)
 
     def clean_and_go_to_inbox(self):
@@ -285,7 +298,9 @@ class SMTPClientUI(QMainWindow):
         def auth_task():
             try:
                 self.login_message.setText("")
-                result = asyncio.run(authentication(email, password, smtp_server=self.smtp_server, smtp_port=self.smtp_port))
+                result = asyncio.run(authentication(email, password,
+                                                    smtp_server=self.smtp_server,
+                                                    smtp_port=self.smtp_port))
                 if result:
                     self.login_message.setText("Inicio de sesión exitoso.")
                     self.stacked_widget.setCurrentWidget(self.menu_screen)
@@ -308,11 +323,18 @@ class SMTPClientUI(QMainWindow):
             self.send_message.setText("Por favor, completa todos los campos antes de enviar el correo.")
             return
 
+        # Leer el estado del checkbox y el contenido de las cabeceras adicionales
+        use_header_command = self.header_checkbox.isChecked()
+        extra_headers = self.extra_headers_input.text().strip()
+
         def send_task():
             try:
                 self.send_message.setText("")
                 result = asyncio.run(send_email(sender, password, recipients, subject, body,
-                                                smtp_server=self.smtp_server, smtp_port=self.smtp_port))
+                                                use_header_command=use_header_command,
+                                                extra_headers=extra_headers,
+                                                smtp_server=self.smtp_server,
+                                                smtp_port=self.smtp_port))
                 if result:
                     self.send_message.setText("Correo enviado exitosamente.")
                 else:
@@ -329,7 +351,9 @@ class SMTPClientUI(QMainWindow):
 
         def retrieve_task():
             try:
-                messages = asyncio.run(retrieve_messages(sender, password, smtp_server=self.smtp_server, smtp_port=self.smtp_port))
+                messages = asyncio.run(retrieve_messages(sender, password,
+                                                         smtp_server=self.smtp_server,
+                                                         smtp_port=self.smtp_port))
                 print(f"Mensajes procesados en lista: {messages}")
                 text = ''.join(messages)
                 print(f"Unión de los SMS: {text}")
