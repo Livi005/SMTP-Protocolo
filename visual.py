@@ -67,12 +67,54 @@ class SMTPClientUI(QMainWindow):
             }
         """)
 
+        # Crear las distintas pantallas
+        self.create_server_config_screen()  # Ahora se muestra primero la configuración del servidor
         self.create_login_screen()
         self.create_menu_screen()
         self.create_send_email_screen()
         self.create_inbox_screen()
-        self.create_server_config_screen()
 
+        # Se muestra inicialmente la pantalla de configuración del servidor
+        self.stacked_widget.setCurrentWidget(self.server_config_screen)
+
+    def create_server_config_screen(self):
+        self.server_config_screen = QWidget()
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        config_label = QLabel("Configuración del Servidor SMTP")
+        config_label.setFont(QFont("Roboto", 20, QFont.Weight.Bold))
+        layout.addWidget(config_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.server_input = QLineEdit()
+        self.server_input.setPlaceholderText("Servidor SMTP")
+        self.server_input.setText(self.smtp_server)
+        layout.addWidget(self.server_input, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.port_input = QLineEdit()
+        self.port_input.setPlaceholderText("Puerto SMTP")
+        self.port_input.setText(str(self.smtp_port))
+        layout.addWidget(self.port_input, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        button_layout = QHBoxLayout()
+        save_button = QPushButton("Guardar y Continuar")
+        save_button.clicked.connect(self.save_server_config)
+        button_layout.addWidget(save_button)
+
+        layout.addLayout(button_layout)
+        self.server_config_screen.setLayout(layout)
+        self.stacked_widget.addWidget(self.server_config_screen)
+
+    def save_server_config(self):
+        server = self.server_input.text().strip()
+        port_text = self.port_input.text().strip()
+        if server:
+            self.smtp_server = server
+        try:
+            port = int(port_text)
+            self.smtp_port = port
+        except ValueError:
+            pass
         self.stacked_widget.setCurrentWidget(self.login_screen)
 
     def create_login_screen(self):
@@ -126,10 +168,6 @@ class SMTPClientUI(QMainWindow):
         inbox_button = QPushButton("Bandeja de entrada")
         inbox_button.clicked.connect(self.clean_and_go_to_inbox)
         layout.addWidget(inbox_button, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        config_button = QPushButton("Configuración del servidor")
-        config_button.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.server_config_screen))
-        layout.addWidget(config_button, alignment=Qt.AlignmentFlag.AlignCenter)
 
         logout_button = QPushButton("Cerrar sesión")
         logout_button.clicked.connect(self.clean_and_go_to_login)
@@ -223,50 +261,6 @@ class SMTPClientUI(QMainWindow):
         self.inbox_screen.setLayout(layout)
         self.stacked_widget.addWidget(self.inbox_screen)
 
-    def create_server_config_screen(self):
-        self.server_config_screen = QWidget()
-        layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        config_label = QLabel("Configuración del Servidor SMTP")
-        config_label.setFont(QFont("Roboto", 20, QFont.Weight.Bold))
-        layout.addWidget(config_label, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        self.server_input = QLineEdit()
-        self.server_input.setPlaceholderText("Servidor SMTP")
-        self.server_input.setText(self.smtp_server)
-        layout.addWidget(self.server_input, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        self.port_input = QLineEdit()
-        self.port_input.setPlaceholderText("Puerto SMTP")
-        self.port_input.setText(str(self.smtp_port))
-        layout.addWidget(self.port_input, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        button_layout = QHBoxLayout()
-        save_button = QPushButton("Guardar")
-        save_button.clicked.connect(self.save_server_config)
-        button_layout.addWidget(save_button)
-
-        back_button = QPushButton("Volver")
-        back_button.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.menu_screen))
-        button_layout.addWidget(back_button)
-
-        layout.addLayout(button_layout)
-        self.server_config_screen.setLayout(layout)
-        self.stacked_widget.addWidget(self.server_config_screen)
-
-    def save_server_config(self):
-        server = self.server_input.text().strip()
-        port_text = self.port_input.text().strip()
-        if server:
-            self.smtp_server = server
-        try:
-            port = int(port_text)
-            self.smtp_port = port
-        except ValueError:
-            pass  # Aquí se podría mostrar un mensaje de error si el puerto no es un entero válido.
-        self.stacked_widget.setCurrentWidget(self.menu_screen)
-
     def clean_and_go_to_login(self):
         self.email_input.clear()
         self.password_input.clear()
@@ -278,7 +272,7 @@ class SMTPClientUI(QMainWindow):
         self.subject_input.clear()
         self.body_input.clear()
         self.send_message.setText("")
-        # Opcional: también limpiar los campos de cabecera si se deseara
+        # Opcional: también limpiar los campos de cabecera si se desea
         self.header_checkbox.setChecked(False)
         self.extra_headers_input.clear()
         self.stacked_widget.setCurrentWidget(self.send_email_screen)

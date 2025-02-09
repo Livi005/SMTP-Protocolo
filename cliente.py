@@ -246,7 +246,7 @@ async def retrieve_messages(sender, password, smtp_server=DEFAULT_SMTP_SERVER, s
 
 if __name__ == "__main__":
     sender = "user2@gmail.com"
-    recipients = ["user1@gmail.com", "user3@gmail.com"]  # Múltiples destinatarios
+    recipients = ["user1@gmail.com", "user3@gmail.com"]  
     subject = "Asunto de prueba 2"
     message = "Este es un mensaje de prueba, para ver si coge sms."
     password = "tu_contraseña_secreta"
