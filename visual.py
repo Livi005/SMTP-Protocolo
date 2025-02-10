@@ -68,7 +68,7 @@ class SMTPClientUI(QMainWindow):
         """)
 
         # Crear las distintas pantallas
-        self.create_server_config_screen()  # Ahora se muestra primero la configuración del servidor
+        self.create_server_config_screen()  # Se muestra primero la configuración del servidor
         self.create_login_screen()
         self.create_menu_screen()
         self.create_send_email_screen()
@@ -193,15 +193,17 @@ class SMTPClientUI(QMainWindow):
         self.subject_input.setPlaceholderText("Asunto")
         layout.addWidget(self.subject_input)
 
+        # --- Código relacionado con HEADER comentado ---
         # Nuevo checkbox para usar el comando HEADER
-        self.header_checkbox = QCheckBox("Usar comando HEADER")
-        self.header_checkbox.setToolTip("Si se activa, se enviará la cabecera mediante el comando HEADER.")
-        layout.addWidget(self.header_checkbox)
-
+        # self.header_checkbox = QCheckBox("Usar comando HEADER")
+        # self.header_checkbox.setToolTip("Si se activa, se enviará la cabecera mediante el comando HEADER.")
+        # layout.addWidget(self.header_checkbox)
+        #
         # Campo para cabeceras adicionales (opcional)
-        self.extra_headers_input = QLineEdit()
-        self.extra_headers_input.setPlaceholderText("Cabeceras adicionales (opcional)")
-        layout.addWidget(self.extra_headers_input)
+        # self.extra_headers_input = QLineEdit()
+        # self.extra_headers_input.setPlaceholderText("Cabeceras adicionales (opcional)")
+        # layout.addWidget(self.extra_headers_input)
+        # ---------------------------------------------------
 
         self.body_input = QTextEdit()
         self.body_input.setPlaceholderText("Cuerpo del mensaje")
@@ -272,9 +274,10 @@ class SMTPClientUI(QMainWindow):
         self.subject_input.clear()
         self.body_input.clear()
         self.send_message.setText("")
-        # Opcional: también limpiar los campos de cabecera si se desea
-        self.header_checkbox.setChecked(False)
-        self.extra_headers_input.clear()
+        # --- Código relacionado con HEADER comentado ---
+        # self.header_checkbox.setChecked(False)
+        # self.extra_headers_input.clear()
+        # ---------------------------------------------------
         self.stacked_widget.setCurrentWidget(self.send_email_screen)
 
     def clean_and_go_to_inbox(self):
@@ -317,16 +320,19 @@ class SMTPClientUI(QMainWindow):
             self.send_message.setText("Por favor, completa todos los campos antes de enviar el correo.")
             return
 
+        # --- Código relacionado con HEADER comentado ---
         # Leer el estado del checkbox y el contenido de las cabeceras adicionales
-        use_header_command = self.header_checkbox.isChecked()
-        extra_headers = self.extra_headers_input.text().strip()
+        # use_header_command = self.header_checkbox.isChecked()
+        # extra_headers = self.extra_headers_input.text().strip()
+        # ---------------------------------------------------
+        # Se asignan valores por defecto ya que se han comentado las opciones de HEADER:
+        use_header_command = False
+        extra_headers = ""
 
         def send_task():
             try:
                 self.send_message.setText("")
                 result = asyncio.run(send_email(sender, password, recipients, subject, body,
-                                                use_header_command=use_header_command,
-                                                extra_headers=extra_headers,
                                                 smtp_server=self.smtp_server,
                                                 smtp_port=self.smtp_port))
                 if result:
