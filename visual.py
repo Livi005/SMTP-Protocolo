@@ -9,7 +9,8 @@ import sys
 import re, time
 import asyncio
 import threading
-from cliente import authentication, send_email, retrieve_messages
+from cliente import authentication, send_email, retrieve_messages ,check_if_blocked
+from PyQt6.QtCore import QTimer
 
 class SMTPClientUI(QMainWindow):
     def __init__(self):
@@ -22,7 +23,7 @@ class SMTPClientUI(QMainWindow):
         # Configuración por defecto del servidor SMTP
         self.smtp_server = "127.0.0.1"
         self.smtp_port = 2525
-
+        self.failed_attempts = 0
         # Estilo general
         self.setStyleSheet("""
             QMainWindow {
@@ -145,12 +146,14 @@ class SMTPClientUI(QMainWindow):
         self.login_message = QLabel("")
         layout.addWidget(self.login_message, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        login_button = QPushButton("Iniciar sesión")
-        login_button.clicked.connect(self.login)
-        layout.addWidget(login_button, alignment=Qt.AlignmentFlag.AlignCenter)
+        # 🔥 Definir login_button aquí antes de usarlo en otras funciones
+        self.login_button = QPushButton("Iniciar sesión")
+        self.login_button.clicked.connect(self.login)
+        layout.addWidget(self.login_button, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self.login_screen.setLayout(layout)
         self.stacked_widget.addWidget(self.login_screen)
+
 
     def create_menu_screen(self):
         self.menu_screen = QWidget()
@@ -288,26 +291,52 @@ class SMTPClientUI(QMainWindow):
         email = self.email_input.text().strip()
         password = self.password_input.text().strip()
         self.login_message.setText("")
+
         if not email or not password:
             self.login_message.setText("Por favor, completa todos los campos.")
             return
 
         def auth_task():
             try:
-                self.login_message.setText("")
-                result = asyncio.run(authentication(email, password,
-                                                    smtp_server=self.smtp_server,
-                                                    smtp_port=self.smtp_port))
+                self.login_message.setText("Verificando estado de la cuenta...")
+                
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                is_blocked = loop.run_until_complete(check_if_blocked(email, smtp_server=self.smtp_server, smtp_port=self.smtp_port))
+
+                if is_blocked:
+                    self.login_message.setText("Cuenta bloqueada. Inténtalo más tarde.")
+                    self.login_button.setEnabled(False)
+                    QTimer.singleShot(30000, self.unlock_login_button)  # Bloqueo por 30 segundos
+                    return  # No intentamos autenticar si está bloqueado
+
+                # Si no está bloqueado, intentamos autenticar
+                self.login_message.setText("Autenticando...")
+                result = loop.run_until_complete(authentication(email, password,
+                                                            smtp_server=self.smtp_server,
+                                                            smtp_port=self.smtp_port))
                 if result:
                     self.login_message.setText("Inicio de sesión exitoso.")
                     self.stacked_widget.setCurrentWidget(self.menu_screen)
+                    self.failed_attempts = 0  # Reiniciar intentos fallidos
                 else:
-                    self.login_message.setText("Usuario o contraseña incorrectos. Por favor, inténtalo de nuevo.")
+                    self.failed_attempts += 1
+                    if self.failed_attempts >= 3:
+                        self.login_message.setText("Demasiados intentos fallidos. Inténtalo de nuevo más tarde.")
+                        self.login_button.setEnabled(False)
+                        QTimer.singleShot(30000, self.unlock_login_button)
+                    else:
+                        self.login_message.setText("Usuario o contraseña incorrectos. Inténtalo nuevamente.")
             except Exception as e:
                 self.login_message.setText(f"Error: {e}")
 
         thread = threading.Thread(target=auth_task)
         thread.start()
+
+    def unlock_login_button(self):
+        self.login_button.setEnabled(True)
+        self.failed_attempts = 0
+        self.login_message.setText("Puedes intentar iniciar sesión nuevamente.")
 
     def send_email_action(self):
         sender = self.email_input.text().strip()
